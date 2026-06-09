@@ -8,11 +8,12 @@
  * Options :
  *   show_zigbee: true   (défaut: true)
  *   show_zwave:  true   (défaut: true)
+ *   Couleur de fond: #000000
  *
- * @version 1.1.0
+ * @version 0.0.1
  */
 
-const NMC_VERSION = "1.3.0";
+const NMC_VERSION = "0.0.1";
 const NMC_NAME    = "network-monitor-card";
 const OFFLINE_MS  = 24 * 60 * 60 * 1000;
 
