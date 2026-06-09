@@ -1,3 +1,6 @@
+[![GitHub Release][releases-shield]][releases]
+[![hacs_badge](https://img.shields.io/badge/HACS-Custom-41BDF5.svg?style=for-the-badge)](https://github.com/hacs/integration)
+[![Community Forum][forum-shield]][forum]
 
 
 # 📡 network-monitor-card
@@ -21,28 +24,23 @@ Carte Lovelace pour Home Assistant affichant l'état du réseau **Zigbee** et **
 
 ---
 
-## 📦 Installation
+## 📥 Installation
 
-### 1. Copier le fichier
+### Via HACS (recommandé) 🔄
+1. Ajoutez ce dépôt à HACS :
+   **Dépôts personnalisés** → **Ajouter un dépôt personnalisé** → `https://github.com/developpeurbox/somfy-protexial-card/`
 
-```bash
-cp network-monitor-card.js /config/www/
-```
+### Ou manuellement 🛠️
 
-### 2. Enregistrer la ressource Lovelace
+1. Télécharger le fichier `somfy-protexial-card.js`
+2. Le copier dans le répertoire `/config/www/` de Home Assistant
+3. Dans HA : **Paramètres → Tableaux de bord → Ressources → Ajouter une ressource**
+   - URL : `/local/somfy-protexial-card.js`
+   - Type : **Module JavaScript**
+4. Vider le cache du navigateur ou de l'app Android (**Paramètres → Compagnon → Vider le cache**)
 
-**Paramètres → Tableaux de bord → ⋮ → Ressources → +**
 
-| Champ | Valeur |
-|-------|--------|
-| URL | `/local/network-monitor-card.js` |
-| Type | Module JavaScript |
-
-### 3. Ajouter la carte
-
-```yaml
-type: custom:network-monitor-card
-```
+---
 
 ---
 
