@@ -28,14 +28,14 @@ Carte Lovelace pour Home Assistant affichant l'état du réseau **Zigbee** et **
 
 ### Via HACS (recommandé) 🔄
 1. Ajoutez ce dépôt à HACS :
-   **Dépôts personnalisés** → **Ajouter un dépôt personnalisé** → `https://github.com/developpeurbox/somfy-protexial-card/`
+   **Dépôts personnalisés** → **Ajouter un dépôt personnalisé** → `https://github.com/developpeurbox/network-monitor-card/`
 
 ### Ou manuellement 🛠️
 
-1. Télécharger le fichier `somfy-protexial-card.js`
+1. Télécharger le fichier `network-monitor-card.js`
 2. Le copier dans le répertoire `/config/www/` de Home Assistant
 3. Dans HA : **Paramètres → Tableaux de bord → Ressources → Ajouter une ressource**
-   - URL : `/local/somfy-protexial-card.js`
+   - URL : `/local/network-monitor-card.js`
    - Type : **Module JavaScript**
 4. Vider le cache du navigateur ou de l'app Android (**Paramètres → Compagnon → Vider le cache**)
 
@@ -115,19 +115,6 @@ Pour assigner une zone : **Paramètres → Appareils & Services → Appareils �
 - Z-Wave JS UI (intégration HA)
 - Lovelace en mode YAML ou interface graphique
 
----
-
-## 🔄 Changelog
-
-### v1.0.0
-- 🎉 Version initiale
-- Découverte dynamique Zigbee (attribut + entité séparée)
-- Découverte dynamique Z-Wave
-- Accordion Zigbee / Z-Wave
-- Filtres OK / Faible / Hors ligne
-- Zones dynamiques via registry HA
-- Clic more-info natif HA
-- Console log au chargement
 
 ---
 
@@ -140,7 +127,6 @@ show_zwave: true    # Afficher le bandeau Z-Wave (défaut: true)
 ```
 
 L'éditeur visuel de Lovelace propose des cases à cocher pour ces deux options.
-
 
 
 [releases-shield]: https://img.shields.io/github/v/release/developpeurbox/network-monitor-card/?style=for-the-badge
