@@ -10,10 +10,10 @@
  *   show_zwave:  true   (défaut: true)
  *   Couleur de fond: #000000
  *
- * @version 0.0.4
+ * @version 0.0.6
  */
 
-const NMC_VERSION = "0.0.4";
+const NMC_VERSION = "0.0.6";
 const NMC_NAME    = "network-monitor-card";
 const OFFLINE_MS  = 24 * 60 * 60 * 1000;
 
@@ -60,8 +60,7 @@ function signalBarsHTML(count, color) {
 // ─── Couleurs — plus lumineuses ───────────────────────────────────────────────
 
 function lqiMeta(lqi, offline) {
-  if (offline) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
-  if (lqi === null) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
+  if (offline || lqi === null) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
   if (lqi >= 150) return { bg: "#0d2518", border: "#1e6b3a", text: "#2ecc71", bars: 4 };
   if (lqi >= 100) return { bg: "#1a2200", border: "#4a6200", text: "#aadd22", bars: 3 };
   if (lqi >= 60)  return { bg: "#261800", border: "#7a4e00", text: "#f39c12", bars: 2 };
@@ -69,8 +68,7 @@ function lqiMeta(lqi, offline) {
 }
 
 function rssiMeta(rssi, offline) {
-  if (offline) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
-  if (rssi === null) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
+  if (offline || rssi === null) return { bg: "#141c28", border: "#243040", text: "#4a6070", bars: 0 };
   if (rssi >= -60) return { bg: "#0d2518", border: "#1e6b3a", text: "#2ecc71", bars: 4 };
   if (rssi >= -75) return { bg: "#1a2200", border: "#4a6200", text: "#aadd22", bars: 3 };
   if (rssi >= -85) return { bg: "#261800", border: "#7a4e00", text: "#f39c12", bars: 2 };
@@ -190,7 +188,7 @@ class NetworkMonitorCard extends HTMLElement {
 
   get _showZb() { return this._config.show_zigbee !== false; }
   get _showZw() { return this._config.show_zwave  !== false; }
-  get _bgColor() { return this._config.background_color || '#0c1220'; }
+  get _bgColor() { return this._config.background_color || 'var(--primary-background-color, #0c1220)'; }
 
   set hass(hass) {
     this._hass = hass;
@@ -310,7 +308,7 @@ _zoneOf(entityId) {
       devices.push({ signalEntityId: eid, mainEntityId: rid, name: friendly, lqi: lqi, age: ls.label, agems: ls.ms, offline: isOffline(ls.ms), zone: zone });
     }
 
-    return devices.sort(function(a, b) { var za = a.zone.name, zb = b.zone.name; return za < zb ? -1 : za > zb ? 1 : a.name < b.name ? -1 : 1; });
+    return devices.sort(function(a, b) { var r = a.zone.name.localeCompare(b.zone.name, "fr", { sensitivity: "base" }); return r !== 0 ? r : a.name.localeCompare(b.name, "fr", { sensitivity: "base" }); });
   }
 
   // ── Découverte Z-Wave ──────────────────────────────────────────────────────
@@ -350,6 +348,8 @@ _zoneOf(entityId) {
         }
       }
       var ls = parseLastSeen(lsRaw);
+      // Si pas de signal du tout et jamais vu → hors ligne
+      var zwOffline = isOffline(ls.ms) || rssi === null;
 
       var attrs    = states[eid].attributes || {};
       var rawName  = attrs.friendly_name || base.replace(/_/g, " ");
@@ -369,12 +369,12 @@ _zoneOf(entityId) {
         rssi:           rssi,
         age:            ls.label,
         agems:          ls.ms,
-        offline:        isOffline(ls.ms),
+        offline:        zwOffline,
         zone:           this._zoneOf(eid) || { name: "—", icon: null }
       });
     }
 
-    return devices.sort(function(a, b) { var za = a.zone.name, zb = b.zone.name; return za < zb ? -1 : za > zb ? 1 : a.name < b.name ? -1 : 1; });
+    return devices.sort(function(a, b) { var r = a.zone.name.localeCompare(b.zone.name, "fr", { sensitivity: "base" }); return r !== 0 ? r : a.name.localeCompare(b.name, "fr", { sensitivity: "base" }); });
   }
 
 
@@ -680,7 +680,7 @@ _zoneOf(entityId) {
       var z = devices[i].zone;
       if (!seen[z.name]) { seen[z.name] = true; zones.push(z); }
     }
-    return zones.sort(function(a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
+    return zones.sort(function(a, b) { return a.name.localeCompare(b.name, "fr", { sensitivity: "base" }); });
   }
 
   static getConfigElement() {
@@ -688,7 +688,7 @@ _zoneOf(entityId) {
   }
 
   static getStubConfig() {
-    return { show_zigbee: true, show_zwave: true, background_color: '#0c1220' };
+    return { show_zigbee: true, show_zwave: true };
   }
 
   getCardSize() { return 3; }
@@ -703,8 +703,6 @@ class NetworkMonitorCardEditor extends HTMLElement {
   _render() {
     var self = this;
     var cfg  = this._config;
-    var bg   = cfg.background_color || "#0c1220";
-    var presets = ["#0c1220","#070b12","#111111","#1a1a2e","#0d1b2a","#12181f","#1c1c1c"];
 
     // On utilise un Shadow DOM pour isoler les styles et utiliser les variables CSS de HA
     if (!this.shadowRoot) this.attachShadow({ mode: "open" });
@@ -763,52 +761,7 @@ class NetworkMonitorCardEditor extends HTMLElement {
         }
         .toggle-row input[type=checkbox]:checked::after { left: 18px; }
 
-        /* ── Color picker ── */
-        .color-row {
-          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
-        }
-        .color-swatch {
-          width: 40px; height: 40px; border-radius: 8px;
-          border: 2px solid var(--divider-color, rgba(255,255,255,0.2));
-          cursor: pointer; overflow: hidden; flex-shrink: 0;
-          position: relative;
-        }
-        .color-swatch input[type=color] {
-          position: absolute; width: 200%; height: 200%;
-          top: -25%; left: -25%; border: none; padding: 0;
-          cursor: pointer; opacity: 0;
-        }
-        .color-swatch-preview {
-          width: 100%; height: 100%; pointer-events: none;
-        }
-        .color-hex {
-          font-family: monospace; font-size: 13px;
-          color: var(--primary-text-color, #e0e0e0);
-          background: var(--secondary-background-color, rgba(255,255,255,0.06));
-          border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
-          border-radius: 6px; padding: 6px 10px;
-          min-width: 90px;
-        }
-        .btn-reset {
-          font-size: 11px; font-weight: 600; letter-spacing: .05em;
-          color: var(--primary-color, #03a9f4);
-          background: transparent;
-          border: 1px solid var(--primary-color, #03a9f4);
-          border-radius: 6px; padding: 5px 10px; cursor: pointer;
-          transition: background .15s;
-        }
-        .btn-reset:hover { background: rgba(3,169,244,.1); }
 
-        /* ── Presets ── */
-        .presets { display: flex; gap: 8px; flex-wrap: wrap; }
-        .preset {
-          width: 32px; height: 32px; border-radius: 7px;
-          cursor: pointer; border: 2px solid transparent;
-          transition: border-color .15s, transform .1s;
-          flex-shrink: 0;
-        }
-        .preset:hover  { transform: scale(1.1); }
-        .preset.active { border-color: var(--primary-color, #03a9f4); }
       </style>
 
       <div class="editor">
@@ -840,28 +793,7 @@ class NetworkMonitorCardEditor extends HTMLElement {
           </div>
         </div>
 
-        <!-- Couleur de fond -->
-        <div class="section">
-          <div class="section-title">
-            <ha-icon icon="mdi:palette"></ha-icon>
-            Couleur de fond
-          </div>
-          <div class="section-body">
-            <div class="color-row">
-              <div class="color-swatch" title="Choisir une couleur">
-                <div class="color-swatch-preview" id="swatch-preview" style="background:${bg}"></div>
-                <input type="color" id="inp-bg" value="${bg}">
-              </div>
-              <span class="color-hex" id="lbl-bg">${bg}</span>
-              <button class="btn-reset" id="btn-bg-reset">↺ Défaut</button>
-            </div>
-            <div class="presets" id="bg-presets">
-              ${presets.map(function(col) {
-                return '<div class="preset' + (bg === col ? " active" : "") + '" data-col="' + col + '" style="background:' + col + '" title="' + col + '"></div>';
-              }).join("")}
-            </div>
-          </div>
-        </div>
+
 
       </div>
     `;
@@ -871,32 +803,6 @@ class NetworkMonitorCardEditor extends HTMLElement {
     root.getElementById("cb-zb").addEventListener("change", function(e) { self._fire("show_zigbee", e.target.checked); });
     root.getElementById("cb-zw").addEventListener("change", function(e) { self._fire("show_zwave",  e.target.checked); });
 
-    var inpBg   = root.getElementById("inp-bg");
-    var lblBg   = root.getElementById("lbl-bg");
-    var preview = root.getElementById("swatch-preview");
-
-    function applyColor(col) {
-      lblBg.textContent   = col;
-      preview.style.background = col;
-      root.querySelectorAll(".preset").forEach(function(p) {
-        p.classList.toggle("active", p.dataset.col === col);
-      });
-      self._fire("background_color", col);
-    }
-
-    inpBg.addEventListener("input", function(e) { applyColor(e.target.value); });
-
-    root.getElementById("btn-bg-reset").addEventListener("click", function() {
-      inpBg.value = "#0c1220";
-      applyColor("#0c1220");
-    });
-
-    root.querySelectorAll(".preset").forEach(function(el) {
-      el.addEventListener("click", function() {
-        inpBg.value = el.dataset.col;
-        applyColor(el.dataset.col);
-      });
-    });
   }
 
   _fire(key, value) {
