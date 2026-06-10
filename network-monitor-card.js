@@ -10,10 +10,10 @@
  *   show_zwave:  true   (défaut: true)
  *   Couleur de fond: #000000
  *
- * @version 0.0.1
+ * @version 0.0.2
  */
 
-const NMC_VERSION = "0.0.1";
+const NMC_VERSION = "0.0.2";
 const NMC_NAME    = "network-monitor-card";
 const OFFLINE_MS  = 24 * 60 * 60 * 1000;
 
@@ -150,7 +150,7 @@ var COMMON_CSS = `
 
   .empty{grid-column:1/-1;text-align:center;padding:28px;color:#3a5570;font-size:11px;letter-spacing:.1em}
   .footer{display:flex;justify-content:space-between;padding-top:10px;border-top:1px solid #1a2840;font-size:10px;color:#2e4560;letter-spacing:.07em;margin-top:6px}
-  .fver{text-align:right;padding:3px 4px;font-size:9px;color:#1e2e40;letter-spacing:.05em;font-family:monospace}
+  .fver{text-align:right;padding:3px 4px;font-size:9px;color:#4a6a80;letter-spacing:.05em;font-family:monospace}
   .loading{text-align:center;padding:32px;color:#3a5570;font-size:11px;letter-spacing:.15em;animation:bk 1.2s ease-in-out infinite}
   @keyframes bk{0%,100%{opacity:.3}50%{opacity:1}}
 `;
@@ -400,7 +400,7 @@ _zoneOf(entityId) {
           </div>
           <div>
             <div class="stitle" style="color:#2ecc71">ZIGBEE</div>
-            <div class="ssub">SLZB-06M · EFR32 · COORDINATOR</div>
+            <div class="ssub" id="zb-sub">—</div>
           </div>
           <div class="sbadges" id="zb-badges"></div>
           <div class="schevron" id="chev-zb">▼</div>
@@ -429,7 +429,7 @@ _zoneOf(entityId) {
           </div>
           <div>
             <div class="stitle" style="color:#4a9ed4">Z-WAVE</div>
-            <div class="ssub">Z-WAVE JS UI · 700 SERIES</div>
+            <div class="ssub" id="zw-sub">—</div>
           </div>
           <div class="sbadges" id="zw-badges"></div>
           <div class="schevron" id="chev-zw">▼</div>
@@ -481,9 +481,59 @@ _zoneOf(entityId) {
 
   _update() {
     if (!this._hass || !this._registryReady) return;
+    this._updateSubtitles();
     if (this._showZb) this._updateSection("zb");
     if (this._showZw) this._updateSection("zw");
     this._applyAccordion();
+  }
+
+  _updateSubtitles() {
+    var s = this._hass.states;
+    // Zigbee : cherche le coordinateur SLZB via ses entités de température ou de version
+    var zbSub = this._shadow.getElementById("zb-sub");
+    if (zbSub) {
+      var zbInfo = [];
+      // Cherche un nom de coordinateur dans les attributs des entités SLZB connues
+      var slzbKeys = Object.keys(s).filter(function(k) {
+        return k.indexOf("slzb") !== -1 || k.indexOf("coordinator") !== -1;
+      });
+      // Essaie de lire le modèle/version depuis les attributs
+      var coordModel = null;
+      for (var i = 0; i < slzbKeys.length; i++) {
+        var attrs = s[slzbKeys[i]].attributes || {};
+        if (attrs.model)        { coordModel = attrs.model; break; }
+        if (attrs.hw_version)   { coordModel = "HW " + attrs.hw_version; break; }
+      }
+      if (coordModel) zbInfo.push(coordModel);
+      // Cherche le nom de l'integration Zigbee2MQTT via sensor.*_coordinator_version
+      var coordVerKey = Object.keys(s).find(function(k) { return k.indexOf("coordinator_version") !== -1 || k.indexOf("zigbee2mqtt") !== -1; });
+      if (coordVerKey && s[coordVerKey].state && s[coordVerKey].state !== "unavailable") {
+        zbInfo.push("Z2M " + s[coordVerKey].state);
+      }
+      zbSub.textContent = zbInfo.length ? zbInfo.join(" · ") : "ZIGBEE2MQTT";
+    }
+
+    // Z-Wave : cherche le nom du contrôleur Z-Wave JS
+    var zwSub = this._shadow.getElementById("zw-sub");
+    if (zwSub) {
+      var zwInfo = [];
+      // Cherche sensor.*_sdk_version ou *_firmware_version lié à Z-Wave
+      var zwKeys = Object.keys(s).filter(function(k) {
+        return (k.indexOf("zwave") !== -1 || k.indexOf("z_wave") !== -1) &&
+               (k.indexOf("_version") !== -1 || k.indexOf("_sdk") !== -1);
+      });
+      if (zwKeys.length) {
+        var v = s[zwKeys[0]].state;
+        if (v && v !== "unavailable" && v !== "unknown") zwInfo.push("SDK " + v);
+      }
+      // Cherche le modèle du contrôleur dans les devices Z-Wave JS
+      var zwDeviceIds = Object.keys(this._zwaveDeviceIds);
+      if (zwDeviceIds.length && this._hass.connection) {
+        // On prend le premier device Z-Wave qui ressemble à un contrôleur
+        // (pas d'entité signal_strength = c'est probablement le hub)
+      }
+      zwSub.textContent = zwInfo.length ? "Z-WAVE JS · " + zwInfo.join(" · ") : "Z-WAVE JS UI";
+    }
   }
 
   _updateSection(net) {
