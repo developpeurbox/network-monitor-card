@@ -10,10 +10,10 @@
  *   show_zwave:  true   (défaut: true)
  *   Couleur de fond: #000000
  *
- * @version 0.0.3
+ * @version 0.0.4
  */
 
-const NMC_VERSION = "0.0.3";
+const NMC_VERSION = "0.0.4";
 const NMC_NAME    = "network-monitor-card";
 const OFFLINE_MS  = 24 * 60 * 60 * 1000;
 
@@ -331,45 +331,40 @@ _zoneOf(entityId) {
       if (!this._zwaveDeviceIds[entryMap.device_id]) continue;
 
       var base = eid.split(".")[1].slice(0, -16);
-      if (seen[base]) continue;
-      seen[base] = true;
+      // Déduplique par device_id (Z-Wave JS peut créer plusieurs _signal_strength par device)
+      var devId = entryMap.device_id;
+      if (seen[devId]) continue;
+      seen[devId] = true;
 
       var raw  = states[eid].state;
       var rssi = (raw && raw !== "unknown" && raw !== "unavailable") ? parseFloat(raw) : null;
       if (isNaN(rssi)) rssi = null;
 
       var lsRaw = null;
-      var lse = states["sensor." + base + "_derniere_connexion"]; if (lse) lsRaw = lse.state;
+      // Z-Wave JS peut nommer last_seen différemment selon la locale
+      var lsKeys = ["_derniere_connexion", "_last_seen", "_last_active", "_dernier_rapport"];
+      for (var lki = 0; lki < lsKeys.length; lki++) {
+        var lsEnt = states["sensor." + base + lsKeys[lki]];
+        if (lsEnt && lsEnt.state && lsEnt.state !== "unavailable" && lsEnt.state !== "unknown") {
+          lsRaw = lsEnt.state; break;
+        }
+      }
       var ls = parseLastSeen(lsRaw);
 
       var attrs    = states[eid].attributes || {};
-      var friendly = (attrs.friendly_name || base)
-        .replace(/ signal strength$/i, "").replace(/ signal$/i, "").replace(/_/g, " ");
-
-      // Cherche la meilleure entité pour le more-info parmi toutes les entités du device
-      // Priorité : non-sensor d'abord, puis sensor autre que _signal_strength/_derniere_connexion
-      var mainId   = null;
-      var devEnts  = this._deviceEntities[entryMap.device_id] || [];
-      var preferred = ["binary_sensor.", "switch.", "light.", "cover.", "climate.", "lock."];
-      outer: for (var pi = 0; pi < preferred.length; pi++) {
-        for (var ei = 0; ei < devEnts.length; ei++) {
-          if (devEnts[ei].indexOf(preferred[pi]) === 0) { mainId = devEnts[ei]; break outer; }
-        }
-      }
-      // Fallback : n'importe quel sensor du device sauf le signal et la connexion
-      if (!mainId) {
-        for (var ei = 0; ei < devEnts.length; ei++) {
-          var candidate = devEnts[ei];
-          if (candidate === eid) continue;
-          if (candidate.slice(-16) === "_signal_strength") continue;
-          if (candidate.indexOf("_derniere_connexion") !== -1) continue;
-          if (candidate.indexOf("sensor.") === 0) { mainId = candidate; break; }
-        }
-      }
+      var rawName  = attrs.friendly_name || base.replace(/_/g, " ");
+      // Nettoie tous les suffixes Z-Wave JS connus
+      var friendly = rawName
+        .replace(/ signal strength$/i, "")
+        .replace(/ rssi$/i, "")
+        .replace(/ signal$/i, "")
+        .replace(/\s*\(\d+\)$/, "")   // retire (2), (3)...
+        .replace(/_/g, " ")
+        .trim();
 
       devices.push({
         signalEntityId: eid,
-        mainEntityId:   mainId || eid,
+        mainEntityId:   eid,   // toujours le signal_strength — fiable et cohérent
         name:           friendly,
         rssi:           rssi,
         age:            ls.label,
@@ -547,8 +542,11 @@ _zoneOf(entityId) {
     var cOk      = all.filter(filters[1].test).length;
     var cWeak    = all.filter(filters[2].test).length;
     var cOffline = all.filter(filters[3].test).length;
+    var cTotal   = all.length;
     var okColor  = isZb ? "#2ecc71" : "#4a9ed4";
+    var totalColor = "#5d8aaa";
     shadow.getElementById(net + "-badges").innerHTML =
+      '<span class="sbadge" style="color:' + totalColor + ';border-color:' + totalColor + '44;background:' + totalColor + '18">' + cTotal + '</span>' +
       '<span class="sbadge" style="color:' + okColor + ';border-color:' + okColor + '44;background:' + okColor + '18">' + cOk + ' OK</span>' +
       (cWeak    ? '<span class="sbadge" style="color:#f39c12;border-color:#f39c1244;background:#f39c1218">' + cWeak + ' ⚠</span>' : "") +
       (cOffline ? '<span class="sbadge" style="color:#4a6070;border-color:#4a607044;background:#4a607018">' + cOffline + ' OFF</span>' : "");
