@@ -10,10 +10,10 @@
  *   show_zwave:  true   (défaut: true)
  *   Couleur de fond: #000000
  *
- * @version 0.0.2
+ * @version 0.0.3
  */
 
-const NMC_VERSION = "0.0.2";
+const NMC_VERSION = "0.0.3";
 const NMC_NAME    = "network-monitor-card";
 const OFFLINE_MS  = 24 * 60 * 60 * 1000;
 
@@ -706,47 +706,197 @@ class NetworkMonitorCardEditor extends HTMLElement {
     var self = this;
     var cfg  = this._config;
     var bg   = cfg.background_color || "#0c1220";
-    this.innerHTML = `
-      <div style="display:flex;flex-direction:column;gap:14px;padding:8px;font-family:sans-serif">
-        <div style="font-weight:600;font-size:14px;color:#ccc">Réseaux à afficher</div>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="cb-zb" ${cfg.show_zigbee !== false ? "checked" : ""} style="width:18px;height:18px">
-          <span style="color:#2ecc71;font-weight:600">Zigbee</span>
-        </label>
-        <label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-          <input type="checkbox" id="cb-zw" ${cfg.show_zwave !== false ? "checked" : ""} style="width:18px;height:18px">
-          <span style="color:#4a9ed4;font-weight:600">Z-Wave</span>
-        </label>
-        <div style="font-weight:600;font-size:14px;color:#ccc;margin-top:4px">Couleur de fond</div>
-        <div style="display:flex;align-items:center;gap:12px">
-          <input type="color" id="inp-bg" value="${bg}" style="width:48px;height:36px;border:none;background:none;cursor:pointer;padding:0">
-          <span id="lbl-bg" style="font-family:monospace;font-size:13px;color:#aaa">${bg}</span>
-          <button id="btn-bg-reset" style="font-size:11px;color:#888;background:transparent;border:1px solid #444;border-radius:4px;padding:3px 8px;cursor:pointer">Défaut</button>
+    var presets = ["#0c1220","#070b12","#111111","#1a1a2e","#0d1b2a","#12181f","#1c1c1c"];
+
+    // On utilise un Shadow DOM pour isoler les styles et utiliser les variables CSS de HA
+    if (!this.shadowRoot) this.attachShadow({ mode: "open" });
+    this.shadowRoot.innerHTML = `
+      <style>
+        :host { display: block; font-family: var(--font-family-body, sans-serif); }
+        .editor {
+          display: flex; flex-direction: column; gap: 0;
+          color: var(--primary-text-color, #e0e0e0);
+        }
+
+        /* ── Section ── */
+        .section {
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+          border-radius: 10px;
+          overflow: hidden;
+          margin-bottom: 12px;
+        }
+        .section-title {
+          display: flex; align-items: center; gap: 8px;
+          padding: 10px 14px;
+          background: var(--secondary-background-color, rgba(255,255,255,0.05));
+          font-size: 11px; font-weight: 700;
+          letter-spacing: .1em;
+          color: var(--secondary-text-color, #aaa);
+          text-transform: uppercase;
+          border-bottom: 1px solid var(--divider-color, rgba(255,255,255,0.08));
+        }
+        .section-title ha-icon { --mdc-icon-size: 16px; opacity: .7; }
+        .section-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+
+        /* ── Toggle row ── */
+        .toggle-row {
+          display: flex; align-items: center; justify-content: space-between;
+          padding: 8px 12px;
+          border-radius: 8px;
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.1));
+          cursor: pointer;
+          transition: background .15s;
+        }
+        .toggle-row:hover { background: var(--secondary-background-color, rgba(255,255,255,0.04)); }
+        .toggle-label { display: flex; align-items: center; gap: 10px; font-size: 14px; font-weight: 600; }
+        .toggle-label ha-icon { --mdc-icon-size: 20px; }
+        /* HA switch */
+        .toggle-row input[type=checkbox] {
+          appearance: none; -webkit-appearance: none;
+          width: 36px; height: 20px; border-radius: 10px;
+          background: var(--disabled-color, #555);
+          position: relative; cursor: pointer; transition: background .2s; flex-shrink: 0;
+        }
+        .toggle-row input[type=checkbox]:checked { background: var(--primary-color, #03a9f4); }
+        .toggle-row input[type=checkbox]::after {
+          content: ""; position: absolute;
+          width: 16px; height: 16px; border-radius: 50%;
+          background: #fff; top: 2px; left: 2px; transition: left .2s;
+        }
+        .toggle-row input[type=checkbox]:checked::after { left: 18px; }
+
+        /* ── Color picker ── */
+        .color-row {
+          display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+        }
+        .color-swatch {
+          width: 40px; height: 40px; border-radius: 8px;
+          border: 2px solid var(--divider-color, rgba(255,255,255,0.2));
+          cursor: pointer; overflow: hidden; flex-shrink: 0;
+          position: relative;
+        }
+        .color-swatch input[type=color] {
+          position: absolute; width: 200%; height: 200%;
+          top: -25%; left: -25%; border: none; padding: 0;
+          cursor: pointer; opacity: 0;
+        }
+        .color-swatch-preview {
+          width: 100%; height: 100%; pointer-events: none;
+        }
+        .color-hex {
+          font-family: monospace; font-size: 13px;
+          color: var(--primary-text-color, #e0e0e0);
+          background: var(--secondary-background-color, rgba(255,255,255,0.06));
+          border: 1px solid var(--divider-color, rgba(255,255,255,0.12));
+          border-radius: 6px; padding: 6px 10px;
+          min-width: 90px;
+        }
+        .btn-reset {
+          font-size: 11px; font-weight: 600; letter-spacing: .05em;
+          color: var(--primary-color, #03a9f4);
+          background: transparent;
+          border: 1px solid var(--primary-color, #03a9f4);
+          border-radius: 6px; padding: 5px 10px; cursor: pointer;
+          transition: background .15s;
+        }
+        .btn-reset:hover { background: rgba(3,169,244,.1); }
+
+        /* ── Presets ── */
+        .presets { display: flex; gap: 8px; flex-wrap: wrap; }
+        .preset {
+          width: 32px; height: 32px; border-radius: 7px;
+          cursor: pointer; border: 2px solid transparent;
+          transition: border-color .15s, transform .1s;
+          flex-shrink: 0;
+        }
+        .preset:hover  { transform: scale(1.1); }
+        .preset.active { border-color: var(--primary-color, #03a9f4); }
+      </style>
+
+      <div class="editor">
+
+        <!-- Réseaux -->
+        <div class="section">
+          <div class="section-title">
+            <ha-icon icon="mdi:wifi"></ha-icon>
+            Réseaux à afficher
+          </div>
+          <div class="section-body">
+
+            <label class="toggle-row" id="row-zb">
+              <div class="toggle-label">
+                <ha-icon icon="mdi:zigbee" style="color:#2ecc71"></ha-icon>
+                <span style="color:#2ecc71">Zigbee</span>
+              </div>
+              <input type="checkbox" id="cb-zb" ${cfg.show_zigbee !== false ? "checked" : ""}>
+            </label>
+
+            <label class="toggle-row" id="row-zw">
+              <div class="toggle-label">
+                <ha-icon icon="mdi:z-wave" style="color:#4a9ed4"></ha-icon>
+                <span style="color:#4a9ed4">Z-Wave</span>
+              </div>
+              <input type="checkbox" id="cb-zw" ${cfg.show_zwave !== false ? "checked" : ""}>
+            </label>
+
+          </div>
         </div>
-        <div style="display:flex;gap:8px;flex-wrap:wrap" id="bg-presets">
-          ${["#0c1220","#070b12","#111111","#1a1a2e","#0d1b2a","#12181f","#1c1c1c"].map(function(col) {
-            return '<div data-col="' + col + '" style="width:28px;height:28px;border-radius:5px;background:' + col + ';cursor:pointer;border:2px solid ' + (bg === col ? "#fff" : "transparent") + '"></div>';
-          }).join("")}
+
+        <!-- Couleur de fond -->
+        <div class="section">
+          <div class="section-title">
+            <ha-icon icon="mdi:palette"></ha-icon>
+            Couleur de fond
+          </div>
+          <div class="section-body">
+            <div class="color-row">
+              <div class="color-swatch" title="Choisir une couleur">
+                <div class="color-swatch-preview" id="swatch-preview" style="background:${bg}"></div>
+                <input type="color" id="inp-bg" value="${bg}">
+              </div>
+              <span class="color-hex" id="lbl-bg">${bg}</span>
+              <button class="btn-reset" id="btn-bg-reset">↺ Défaut</button>
+            </div>
+            <div class="presets" id="bg-presets">
+              ${presets.map(function(col) {
+                return '<div class="preset' + (bg === col ? " active" : "") + '" data-col="' + col + '" style="background:' + col + '" title="' + col + '"></div>';
+              }).join("")}
+            </div>
+          </div>
         </div>
+
       </div>
     `;
-    this.querySelector("#cb-zb").addEventListener("change", function(e) { self._fire("show_zigbee", e.target.checked); });
-    this.querySelector("#cb-zw").addEventListener("change", function(e) { self._fire("show_zwave",  e.target.checked); });
-    var inpBg = this.querySelector("#inp-bg");
-    var lblBg = this.querySelector("#lbl-bg");
-    inpBg.addEventListener("input", function(e) {
-      lblBg.textContent = e.target.value;
-      self._fire("background_color", e.target.value);
+
+    // Events
+    var root = this.shadowRoot;
+    root.getElementById("cb-zb").addEventListener("change", function(e) { self._fire("show_zigbee", e.target.checked); });
+    root.getElementById("cb-zw").addEventListener("change", function(e) { self._fire("show_zwave",  e.target.checked); });
+
+    var inpBg   = root.getElementById("inp-bg");
+    var lblBg   = root.getElementById("lbl-bg");
+    var preview = root.getElementById("swatch-preview");
+
+    function applyColor(col) {
+      lblBg.textContent   = col;
+      preview.style.background = col;
+      root.querySelectorAll(".preset").forEach(function(p) {
+        p.classList.toggle("active", p.dataset.col === col);
+      });
+      self._fire("background_color", col);
+    }
+
+    inpBg.addEventListener("input", function(e) { applyColor(e.target.value); });
+
+    root.getElementById("btn-bg-reset").addEventListener("click", function() {
+      inpBg.value = "#0c1220";
+      applyColor("#0c1220");
     });
-    this.querySelector("#btn-bg-reset").addEventListener("click", function() {
-      inpBg.value = "#0c1220"; lblBg.textContent = "#0c1220";
-      self._fire("background_color", "#0c1220");
-    });
-    this.querySelectorAll("#bg-presets [data-col]").forEach(function(el) {
+
+    root.querySelectorAll(".preset").forEach(function(el) {
       el.addEventListener("click", function() {
-        var col = el.dataset.col;
-        inpBg.value = col; lblBg.textContent = col;
-        self._fire("background_color", col);
+        inpBg.value = el.dataset.col;
+        applyColor(el.dataset.col);
       });
     });
   }
